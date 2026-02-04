@@ -1,0 +1,11 @@
+langchain
+langchain-openai
+langchain-qdrant
+langchain-community
+langchain-voyageai
+langgraph
+qdrant-client
+pandas
+sqlite-utils
+sentence-transformers
+streamlit
