@@ -16,3 +16,9 @@ sqlite-utils
 
 streamlit
 requests
+
+mixedbread
+sqlalchemy
+
+pypdf
+rapidfuzz
