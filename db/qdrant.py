@@ -1,97 +1,69 @@
-# 1. Import Library
-# Import library dependencies
-import os
-from dotenv import load_dotenv
-
-# Import Langchain dependencies
-from langchain_openai import OpenAI, ChatOpenAI, OpenAIEmbeddings
-from openai import AsyncOpenAI
-
-# Import Qdrant dependencies
-from qdrant_client import AsyncQdrantClient
-from langchain_qdrant import QdrantVectorStore
-from sentence_transformer import CrossEncoder
-
-# Import config
 from config import *
+from langchain_core.documents import Document
+import logging
 
-# 2. Load .env dependencies
-load_dotenv()
+def create_document_jobs(rows: list):
+    documents = []
 
-# Will try using OOP Class code structure to simulate production environment
-# Implementation of Separation of Concerns (SoC)
+    for row in rows:
+        job_id, job_title, company_name, location, work_type, salary,salary_min, salary_max,job_description = row
 
-#====== CLASS DEFINITION =====
-# 3. Initialize Qdrant class
-class QdrantManager:
-    def __init__(self):
-        """
-        Function to initialize Qdrant Manager
-        """
-        # Setup OpenAI Embedding
-        self.embeddings = OpenAIEmbeddings(
-            openai_api_key = OPENAI_API_KEY,
-            model = EMBEDDING_MODEL,
-            dimensions=1536 # reduce the dimension to fit in qdrant
+        content = f"""
+        Job Title: {job_title}
+
+        Job Description:{job_description}
+        """.strip()
+
+        doc = Document(
+            page_content=content,
+            metadata={
+                "id": str(job_id),
+                "job_title": job_title,
+                "company_name": company_name,
+                "location": location,
+                "work_type": work_type,
+                "salary": salary,
+                "salary_min": salary_min,
+                "salary_max": salary_max,
+            }
         )
-        # Setup Qdrant Async Client
-        self.async_client = AsyncQdrantClient(
+
+        documents.append(doc)
+    
+    return documents
+
+
+def create_qdrant_collection(collection_name: str, documents: list):
+    """
+    Insert document into qdrant and create collection
+    """
+    try:
+        uuids = [str(uuid4()) for _ in range(len(documents))]
+
+        return QdrantVectorStore.from_documents(
+            documents=documents,
+            embedding=embeddings,
+            ids=uuids,
+            prefer_grpc=True,
+            api_key=QDRANT_API_KEY,
             url=QDRANT_URL,
-            api_key=QDRANT_API_KEY
+            collection_name=collection_name
         )
-    def get_vector_store(self):
-        """
-        Function to get the vector store of Qdrant
-
-        Returns:
-            QdrantVectorStore: Vector store of Qdrant
-        """
-        return QdrantVectorStore(
-            client=self.async_client,
-            collection_name=QDRANT_COLLECTION_NAME,
-            embedding=self.embeddings
-        )
-    async def close_async_client(self):
-        """
-        Function to kill the async client if not used
-        """
-        await self.async_client.close()
-
-# 4. Input SQlite database to Qdrant
+    except Exception as e:
+        raise RuntimeError(f"[QDRANT] create collection failed: {e}")
 
 
-class RerankerManager():
-    def __init__(self):
-        """
-        Function to initialize Reranker
-        """
-
-
-
-
-class AIChatAssistant:
-    def __init__(self):
-        """
-        Function to initialize AI Chat Assistant
-        """
-
-# # ==== Main Function =====\
-
-# db = QdrantManager()
-# vector_store = db.get_vector_store()
-
-# # ==== Test Function =====\
-
-# async def test_qdrant():
-#     """
-#     Function to test Qdrant
-#     """
-#     vector_store = db.get_vector_store()
-#     vector_store.add_texts(
-#         texts=["Hello World", "Hello Python"],
-#         metadatas=[{"source": "test"}, {"source": "test"}]
-#     )
-#     print("Qdrant test passed")
-
-# if __name__ == "__main__":
-#     asyncio.run(test_qdrant())
+# intialize Qdrant vector store
+def get_vector_store(collection_name: str):
+    """
+    Connect to an existing collection for retrieval.
+    """
+    vector_store =  QdrantVectorStore.from_existing_collection(
+        url=QDRANT_URL,
+        api_key=QDRANT_API_KEY,
+        collection_name=collection_name,
+        embedding=embeddings
+    )
+    logging.info(f"Connected to Qdrant at {QDRANT_URL}, collection: {QDRANT_COLLECTION_NAME}")\
+    
+    return vector_store
