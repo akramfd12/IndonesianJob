@@ -106,3 +106,7 @@ agent = create_agent(
     tools=[sql_readonly_query, search_jobs],
     system_prompt=system_prompt
     )
+
+def run_agent(user_input: str):
+    response = agent.invoke({input: user_input})
+    return response

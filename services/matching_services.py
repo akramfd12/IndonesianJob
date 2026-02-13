@@ -1,6 +1,8 @@
 from pypdf import PdfReader
-from rapidfuzz import fuzz
-import re
+import json
+from config import client
+from db.qdrant import get_vector_store
+from agents.tools import *
 
 def extract_text_from_pdf(file_path: str):
     reader = PdfReader(file_path)
@@ -11,183 +13,102 @@ def extract_text_from_pdf(file_path: str):
             text += page_text + "\n"
     return text
 
-extract_cv = extract_text_from_pdf(file_path=r"E:\PortoProject\IndonesianJob\CV_Muhammad Fakhrul Ikram_260203.pdf")
+# cv_text = extract_text_from_pdf(file_path=r"E:\PortoProject\IndonesianJob\CV_Muhammad Fakhrul Ikram_260203.pdf")
 
-SECTION_SYNONYMS = {
+def build_cv_structuring_prompt():
+    cv_text = extract_text_from_pdf(file_path=r"E:\PortoProject\IndonesianJob\CV_Muhammad Fakhrul Ikram_260203.pdf")
+    return f"""
+    You are a professional CV parser.
 
-    "summary": [
-        # English
-        "career objective",
-        "objective",
-        "summary",
-        "professional summary",
-        "profile",
-        "about me",
+    Extract structured information from the CV below.
 
-        # Indonesia
-        "ringkasan",
-        "ringkasan profil",
-        "tujuan karir",
-        "profil",
-        "tentang saya",
-        "deskripsi diri"
-    ],
+    Return ONLY valid JSON.
+    Do not explain anything.
+    Do not add extra text.
 
-    "education": [
-        # English
-        "education",
-        "academic background",
-        "educational history",
-        "qualification",
+    If a section does not exist, return empty string "" or empty list [].
 
-        # Indonesia
-        "pendidikan",
-        "riwayat pendidikan",
-        "latar belakang pendidikan",
-        "kualifikasi pendidikan"
-    ],
-
-    "experience": [
-        # English
-        "work experience",
-        "professional experience",
-        "employment",
-        "career history",
-        "work history",
-
-        # Indonesia
-        "pengalaman kerja",
-        "pengalaman profesional",
-        "riwayat pekerjaan",
-        "riwayat kerja",
-        "karir"
-    ],
-
-    "projects": [
-        # English
-        "project",
-        "projects",
-        "personal project",
-        "portfolio",
-        "case study",
-        "research project",
-
-        # Indonesia
-        "proyek",
-        "projek",
-        "portfolio proyek",
-        "studi kasus",
-        "pengalaman proyek"
-    ],
-
-    "technical_skills": [
-        # English
-        "technical skills",
-        "technical expertise",
-        "core skills",
-        "hard skills",
-
-        # Indonesia
-        "keahlian teknis",
-        "kemampuan teknis",
-        "keterampilan teknis",
-        "hard skill"
-    ],
-
-    "software_skills": [
-        # English
-        "software skills",
-        "tools",
-        "technologies",
-        "tech stack",
-
-        # Indonesia
-        "perangkat lunak",
-        "tools dan teknologi",
-        "teknologi",
-        "stack teknologi"
-    ],
-
-    "soft_skills": [
-        # English
-        "soft skills",
-        "personal skills",
-        "interpersonal skills",
-
-        # Indonesia
-        "soft skill",
-        "kemampuan pribadi",
-        "keterampilan pribadi",
-        "kemampuan interpersonal"
-    ]
-}
-
-def normalize(text):
-    text = text.lower()
-    text = re.sub(r'[^a-z\s]', '', text)
-    return text.strip()
-
-def detect_section(header):
-    header_norm = normalize(header)
-
-    best_match = None
-    best_score = 0
-
-    for section, keywords in SECTION_SYNONYMS.items():
-        for keyword in keywords:
-            score = fuzz.token_sort_ratio(header_norm, keyword)
-
-            if score > best_score:
-                best_score = score
-                best_match = section
-
-    if best_score >= 85:
-        return best_match
+    JSON format:
     
-    return None
+    {{
+    "summary": "",
+    "education": "",
+    "experience": [
+        {{
+        "title": "",
+        "company": "",
+        "duration": "",
+        "description": ""
+        }}
+    ],
+    "projects": [
+        {{
+        "name": "",
+        "description": ""
+        }}
+    ],
+    "technical_skills": [],
+    "software_skills": [],
+    "soft_skills": []
+    }}
 
-def split_cv_into_sections(cv_text):
-    lines = cv_text.split("\n")
+    CV TEXT:
+    {cv_text}
+    """
 
-    sections = {}
-    current_section = None
+def parse_cv_with_llm(prompt: str):
 
-    for line in lines:
-        line = line.strip()
+    prompt = build_cv_structuring_prompt()
+    
+    response = client.chat.completions.create(
+        model="gpt-5-mini",   # bisa pakai model lain juga
+        messages=[
+            {"role": "system", "content": "You are a strict JSON generator."},
+            {"role": "user", "content": prompt}
+        ]
+    )
 
-        if not line:
-            continue
+    content = response.choices[0].message.content
 
-        detected = None
-
-        if len(line.split()) <= 6:
-            detected = detect_section(line)
-
-        if detected:
-            current_section = detected
-            sections[current_section] = []
-            continue
-
-        if current_section:
-            sections[current_section].append(line)
-
-    for sec in sections:
-        sections[sec] = "\n".join(sections[sec]).strip()
-
-    return sections
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        raise ValueError("LLM returned invalid JSON")
 
 def build_cv_query(structured_cv: dict):
-    structured_cv = split_cv_into_sections(extract_cv)
-    return f"""
-    Experience:
-    {structured_cv.get("experience", "")}
+    experience_text = "\n".join([
+        f"{exp['title']} at {exp['company']} ({exp['duration']}): {exp['description']}"
+        for exp in structured_cv.get("experience", [])
+    ])
 
-    Education:
-    {structured_cv.get("education", "")}
+    project_text = "\n".join([
+        f"{proj['name']}: {proj['description']}"
+        for proj in structured_cv.get("projects", [])
+    ])
 
-    Technical Skills:
-    {structured_cv.get("technical_skills", "")}
+    skills_text = ", ".join(structured_cv.get("technical_skills", []))
+    software_text = ", ".join(structured_cv.get("software_skills", []))
 
-    Software Skills:
-    {structured_cv.get("software_skills", "")}
-    """
+    return (
+        f"Experience:\n{experience_text}\n\n"
+        f"Projects:\n{project_text}\n\n"
+        f"Technical Skills:\n{skills_text}\n\n"
+        f"Software Skills:\n{software_text}"
+    )
+
+
+# def cv_search_jobs(query_text:str, k: int = 5) -> list:
+
+#     vectorstore = get_vector_store("indonesianjobs_collection")
+
+#     results = vectorstore.similarity_search_with_score(
+#         query_text,
+#         k=5
+#     )
+
+#     return results
+# query_text = build_cv_query(structured_cv = parse_cv_with_llm(cv_text))
+
+# test = cv_search_jobs(query_text)
+
+# print(test)

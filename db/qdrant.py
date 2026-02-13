@@ -37,8 +37,25 @@ def create_qdrant_collection(collection_name: str, documents: list):
     """
     Insert document into qdrant and create collection
     """
+    client = QdrantClient(
+        url=QDRANT_URL,
+        api_key=QDRANT_API_KEY,
+        prefer_grpc=True,
+        timeout=60
+    )
+    
+    collections = client.get_collections().collections
+    existing_names = [c.name for c in collections]
+
+    if collection_name in existing_names:
+        print(f"Collection '{collection_name}' already exists. Skipping ingestion.")
+        return  # 🔒 STOP DI SINI
+
+    # Kalau belum ada → baru create & insert
+    print(f"Creating collection '{collection_name}'...")
     try:
         uuids = [str(uuid4()) for _ in range(len(documents))]
+
 
         return QdrantVectorStore.from_documents(
             documents=documents,
@@ -47,11 +64,11 @@ def create_qdrant_collection(collection_name: str, documents: list):
             prefer_grpc=True,
             api_key=QDRANT_API_KEY,
             url=QDRANT_URL,
-            collection_name=collection_name
+            collection_name=collection_name,
+            batch_size=16
         )
     except Exception as e:
         raise RuntimeError(f"[QDRANT] create collection failed: {e}")
-
 
 # intialize Qdrant vector store
 def get_vector_store(collection_name: str):
