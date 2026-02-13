@@ -4,6 +4,8 @@ import logging
 import pandas as pd
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 
+from openai import OpenAI
+
 from langchain_core.documents import Document
 from langchain_qdrant import QdrantVectorStore
 
@@ -37,6 +39,9 @@ QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME")
 MIXBREAD_API = os.getenv("MIXBREAD_API")
 HF_TOKEN = os.getenv("HUGGINGFACE_API_KEY")
 RERANKER_MODEL = os.getenv("RERANKER_MODEL")
+
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # initialize LLM and embeddings
 llm = ChatOpenAI(model=CHAT_MODEL, api_key=OPENAI_API_KEY, temperature=0)

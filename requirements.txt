@@ -9,8 +9,6 @@ langchain-qdrant
 langchain-openai
 langgraph
 
-sentence-transformers
-
 qdrant-client
 sqlite-utils
 
@@ -21,4 +19,3 @@ mixedbread
 sqlalchemy
 
 pypdf
-rapidfuzz

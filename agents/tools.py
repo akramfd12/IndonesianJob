@@ -1,7 +1,7 @@
 from config import *
 from db.qdrant import *
 from db.sqlite import *
-from services.matching_services import build_cv_query, split_cv_into_sections
+from services.matching_services import *
 from langchain_core.tools import tool
 from langchain_community.utilities import SQLDatabase
 
@@ -112,11 +112,28 @@ def sql_readonly_query(query: str) -> str:
 
 
 # #tools for cv match
-# query_text = build_cv_query(structured_cv)
+@tool
+def cv_search_jobs(query_text:str, upload_cv:str, k: int) -> list:
+  """
+  Docstring for cv_search_jobs
+  
+  :param query_text: Description
+  :type query_text: str
+  :param k: Description
+  :type k: int
+  :return: Description
+  :rtype: list
+  """
+  cv_text = extract_text_from_pdf(file_path=upload_cv)
+  parsing_cv = parse_cv_with_llm(cv_text=cv_text)
+  query_text = build_cv_query(structured_cv=parsing_cv)
 
-# vectorstore = get_vector_store("indonesianjobs_collection")
 
-# results = vectorstore.similarity_search_with_score(
-#     query_text,
-#     k=5
-# )
+  vectorstore = get_vector_store("indonesianjobs_collection")
+
+  results = vectorstore.similarity_search_with_score(
+        query_text,
+        k=5
+    )
+
+  return results
