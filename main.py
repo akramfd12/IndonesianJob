@@ -44,14 +44,25 @@ app = FastAPI()
 class ChatRequest(BaseModel):
     message: str
 
+class ChatResponse(BaseModel):
+    response: str
+
 @app.get("/")
 def health_check():
-    return{"status": "Running"}
+    return {"status": "Running"}
 
-@app.post("/chat")
+@app.post("/chat", response_model=ChatResponse)
 def chat_endpoint(request: ChatRequest):
-    results= run_agent(request.message)
-    return {"response": results}
+    result = run_agent(request.message)
+
+    if hasattr(result, "content"):
+        final_answer = result.content
+    elif isinstance(result, dict) and "messages" in result:
+        final_answer = result["messages"][-1].content
+    else:
+        final_answer = str(result)
+
+    return ChatResponse(response=final_answer)
 
 if __name__ == "__main__":
     import uvicorn
