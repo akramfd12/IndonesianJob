@@ -4,66 +4,70 @@ from db.sqlite import *
 from services.matching_services import *
 from langchain_core.tools import tool
 from langchain_community.utilities import SQLDatabase
+from langchain_community.agent_toolkits import SQLDatabaseToolkit
 
 
-#Tools for RAG
+#Tools for RAG Agent
 @tool
-def search_jobs(query:str, top_k: int = 5, retrieve_k: int = 20) -> list: 
+def search_jobs(query: str, top_k: int = 5, retrieve_k: int = 20) -> list:
     """
-    Retrieve and rerank job vacancies relevant to a user query.
+    Retrieve relevant job postings based on a search query.
 
-    Purpose:
-    - Use this tool when the user asks for job recommendations,
-      suitable roles, or similar job positions.
-    - This tool performs semantic retrieval and relevance reranking.
+    Args:
+        query (str): Job-related search query.
+        top_k (int): Number of results to return.
+        retrieve_k (int): Number of candidates to retrieve before ranking.
 
-    IMPORTANT USAGE RULES:
-    - Use ONLY for job discovery, job matching, or job descriptions.
-    - Do NOT use this tool for salary statistics, counting jobs,
-      or numerical aggregation (use text_to_sql instead).
-
-    DATA INTEGRITY RULES:
-    - ONLY use information explicitly present in the retrieved job data.
-    - Do NOT infer seniority, eligibility, or experience level unless stated.
-    - Do NOT assume fresh graduate acceptance unless explicitly mentioned.
-    - You MAY summarize or rephrase job information,
-      but MUST NOT add new facts.
-
-    OUTPUT GUIDELINES:
-    - Prefer structured, human-readable output.
-    - Summarize long descriptions into key responsibilities and qualifications.
-    - Avoid raw JSON or unformatted text dumps.
-
-    BEHAVIOR RULE:
-    - Do NOT ask clarification questions if a reasonable default interpretation exists.
-    - Return the most relevant job results directly.
+    Returns:
+        list: Ranked job results.
     """
+
     #Conenct to vector db
     vector_db_conn = get_vector_store(collection_name="indonesianjobs_collection")
     
-    #Retrieval 
-    get_jobs = vector_db_conn.similarity_search(query, k=retrieve_k)
-    jobs_doc = [doc.page_content for doc in get_jobs]
+    # Step 1: Retrieve full docs
+    docs = vector_db_conn.similarity_search(query, k=retrieve_k)
 
-    #Rerank
+    # Step 2: Extract page_content for reranking
+    contents = [doc.page_content for doc in docs]
+
+    # Step 3 : Rerank
     reranked = mxbai.rerank(model = reranker,
                             query = query,
-                            input = jobs_doc,
+                            input = contents,
                             top_k = top_k,
                             return_input=True)
-    return reranked
+    
+    # Step 4 : Map rerank indices back to docs
+    results = []
+    for item in reranked.data:
+        doc = docs[item.index]
+
+        results.append({
+            "job_title": doc.metadata.get("job_title"),
+            "company_name": doc.metadata.get("company_name"),
+            "location": doc.metadata.get("location"),
+            "work_type": doc.metadata.get("work_type"),
+            "salary": doc.metadata.get("salary"),
+            "job_description": doc.page_content
+        })
+    return results
 
 
-#Tools For Text To Sql
+#Tools For Text To Sql Agent
 db = SQLDatabase.from_uri("sqlite:///db/jobs.db?mode=ro",
                           engine_args={"connect_args": {"uri": True}}
                           )
+
+# toolkit = SQLDatabaseToolkit(db=db, llm=model)
+
+# tools = toolkit.get_tools()
 
 @tool
 def sql_readonly_query(query: str) -> str:
     """
     Execute a READ-ONLY SQL query on the jobs database.
-    
+
     DATABASE SCHEMA:
     jobs.job_title TEXT,
     jobs.company_name TEXT,
@@ -75,26 +79,19 @@ def sql_readonly_query(query: str) -> str:
     jobs.salary_max TEXT
 
     DIALECT:
-    SQLite 
-    
-    IMPORTANT SALARY RULES:
-    - The `salary` column is TEXT and MUST NOT be used for calculations.
-    - For ALL numerical or statistical calculations involving salary,
-      you MUST use:
-        - `salary_min` for minimum salary
-        - `salary_max` for maximum salary
-    - Never use the `salary` column in WHERE, ORDER BY, or aggregation.
+    SQLite
 
-    Use this tool ONLY for:
-    - AVG, MAX, MIN, COUNT, SUM
-    - Salary statistics
-    - Grouped numerical analysis
+    SALARY RULES:
+    - The `salary` column is TEXT and MUST NOT be used in calculations.
+    - For numerical salary calculations, use `salary_min` and `salary_max`.
+    - `salary_min` and `salary_max` are stored as TEXT.
+    - Always CAST them to INTEGER before aggregation.
+    - Never use `salary` in WHERE, ORDER BY, or aggregation.
 
-    SQL Rules:
-    - ONLY SELECT statements are allowed
-    - DO NOT use INSERT, UPDATE, DELETE, DROP, ALTER, or TRUNCATE
-    - DO NOT use SELECT *
-    - Always use LIMIT 5 unless the user explicitly asks otherwise
+    QUERY RULES:
+    - ONLY SELECT statements are allowed.
+    - DO NOT use INSERT, UPDATE, DELETE, DROP, ALTER, or TRUNCATE.
+    - DO NOT use SELECT *.
 
     Input:
     - query: A valid SQL SELECT statement using salary_min / salary_max
@@ -137,3 +134,7 @@ def cv_search_jobs(query_text:str, upload_cv:str, k: int) -> list:
     )
 
   return results
+
+
+if __name__ == "__main__":
+    search_jobs()
