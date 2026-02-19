@@ -10,7 +10,12 @@ def create_document_jobs(rows: list):
 
         content = f"""
         Job Title: {job_title}
-
+        Company Name: {company_name}
+        Location: {location}
+        Work Type: {work_type}
+        Salary: {salary}
+        Salary Min: {salary_min}
+        Salary Max: {salary_max}
         Job Description:{job_description}
         """.strip()
 

@@ -8,7 +8,7 @@ from langchain_community.utilities import SQLDatabase
 
 #Tools for RAG
 @tool
-def search_jobs(query:str, top_k: int = 5, retrieve_k: int = 20) -> list: 
+def rag_job_search(query:str, top_k: int = 5, retrieve_k: int = 20) -> list: 
     """
     Retrieve and rerank job vacancies relevant to a user query.
 
@@ -60,7 +60,7 @@ db = SQLDatabase.from_uri("sqlite:///db/jobs.db?mode=ro",
                           )
 
 @tool
-def sql_readonly_query(query: str) -> str:
+def text_to_sql(query: str) -> str:
     """
     Execute a READ-ONLY SQL query on the jobs database.
     
