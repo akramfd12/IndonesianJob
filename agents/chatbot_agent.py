@@ -5,36 +5,33 @@ from agents.sql_agent import call_sql_agent
 
 system_prompt=(
     """
-    You are the Main Orchestrator Agent of an AI Job Intelligence System.
+   You are the main orchestrator.
 
-    You coordinate specialized sub-agents.
+    Available tools:
+    - rag_agent: for job search and recommendations.
+    - sql_agent: for statistics and numeric aggregations.
 
-    Available agents:
-    - sql_agent: Handles structured database queries, filtering, counting,
-    aggregations, and exact job data retrieval from a relational database.
-    - rag_agent: Handles semantic search, job recommendations,
-    and similarity matching using a vector database.
-
-    Use the task tool to delegate work
-
-    Important Rules:
-    - Do NOT answer database-related or retrieval questions directly.
-    - Always delegate using the task tool.
-    - Do not hallucinate job data.
-    - Do not mention internal routing decisions.
-    - Only use results returned by sub-agents.
-    - If user intent is unclear, ask for clarification before delegating.
-    - Return clean and structured results.
-
+    Rules:
+    - Always use a tool to answer.
+    - If the user is searching for jobs, use rag_agent.
+    - If the user asks for statistics or numbers, use sql_agent.
+    - Do not add filters or assumptions that the user did not mention.
+    - Do not ask unnecessary clarification.
+    - Do not generate forms.
     """
 )
 
 agent = create_agent(
     model=llm,
     tools=[call_rag_agent,call_sql_agent],
-    system_prompt=system_prompt
+    system_prompt=system_prompt    
     )
 
 def run_agent(user_input: str):
-    response = agent.invoke({input: user_input})
-    return response
+    result = agent.invoke({
+        "messages": [
+            {"role": "user", "content": user_input}
+        ]
+    })
+
+    return result

@@ -29,25 +29,26 @@ class ChatRequest(BaseModel):
 
 # Output Class (Response)
 # 1. Job searched result from Input query (SQL + RAG)
-class JobResultResponse(BaseModel):
-    """
-    Response: Job searched from DB (SQL + RAG) by Agent instruction
-    Input for ChatResponses
-    """
-    job_title: str
-    company_name: str
-    location: str
-    work_type: str
-    job_description: Optional[str] = None
-    salary_min: Optional[int] = None
-    salary_max: Optional[int] = None
-    relevance_score: Optional[float] = None
+# class JobResultResponse(BaseModel):
+#     """
+#     Response: Job searched from DB (SQL + RAG) by Agent instruction
+#     Input for ChatResponses
+#     """
+#     job_title: str
+#     company_name: str
+#     location: str
+#     work_type: str
+#     job_description: Optional[str] = None
+#     salary: Optional[str] = None
+#     salary_min: Optional[int] = None
+#     salary_max: Optional[int] = None
+#     relevance_score: Optional[float] = None
 
-# 2. Final response from chatbot agent (AI Message from invoke responses)
-class ChatResponse(BaseModel):
-    """
-    Response: Final response from chatbot agent (AI Message from invoke responses)
-    """
-    response: str
-    source: List[JobResultResponse] = []
+# # 2. Final response from chatbot agent (AI Message from invoke responses)
+# class ChatResponse(BaseModel):
+#     """
+#     Response: Final response from chatbot agent (AI Message from invoke responses)
+#     """
+#     response: str
+#     source: List[JobResultResponse] = []
     
