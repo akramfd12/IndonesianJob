@@ -4,6 +4,18 @@ from agents.tools import search_jobs
 from config import *
 
 
+# =========================================================
+# RAG SUB-AGENT CONFIGURATION
+# =========================================================
+# This agent is responsible ONLY for job recommendations.
+# It retrieves structured job data from Qdrant via search_jobs tool.
+# The output format is STRICTLY controlled via system prompt.
+# =========================================================
+
+
+# ---------------------------------------------------------
+# SYSTEM PROMPT (STRICT JSON OUTPUT CONTROL)
+# ---------------------------------------------------------
 system_prompt = """
     You are a job recommendation agent.
 
@@ -31,12 +43,25 @@ system_prompt = """
 
 """
 
+
+# ---------------------------------------------------------
+# CREATE RAG SUB-AGENT
+# ---------------------------------------------------------
+# - model → LLM defined in config
+# - tools → search_jobs (retrieval from vector DB)
+# - system_prompt → forces structured JSON output
 rag_subagent = create_agent(
                model= llm,
                tools=[search_jobs],
                system_prompt=system_prompt
 )
 
+
+# ---------------------------------------------------------
+# TOOL WRAPPER FOR MAIN AGENT
+# ---------------------------------------------------------
+# This function wraps the RAG sub-agent so it can be
+# called as a tool inside a higher-level agent system.
 @tool("job_recommendation", description="Handle job search and job-related insights using internal knowledge.")
 def call_rag_agent(query: str):
     """
@@ -45,8 +70,14 @@ def call_rag_agent(query: str):
     :param query: User Typing
     :type query: str
     """
-    result = rag_subagent.invoke({"messages": [{"role": "user", "content": query}]})
+
+    # Invoke RAG sub-agent using LangChain message format
+    result = rag_subagent.invoke({
+        "messages": [
+            {"role": "user", "content": query}
+        ]
+    })
+
+    # Return ONLY the final message content
+    # (Should already be strict JSON based on system prompt)
     return result["messages"][-1].content
-
-
-
