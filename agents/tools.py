@@ -1,44 +1,52 @@
 from config import *
 from db.qdrant import *
 from db.sqlite import *
-from services.matching_services import *
+from services.matching_services import parse_cv_with_llm, build_cv_query
 from langchain_core.tools import tool
 from langchain_community.utilities import SQLDatabase
-from langchain_community.agent_toolkits import SQLDatabaseToolkit
+from langchain_core.runnables import RunnableConfig
 
-
-#Tools for RAG Agent
+# Tools for RAG Agent
 @tool
-def search_jobs(query: str, top_k: int = 5, retrieve_k: int = 20) -> list:
+def search_jobs(
+    query: str,
+    top_k: int = 5,
+    retrieve_k: int = 20,
+    config: RunnableConfig = None
+) -> list:
     """
     Retrieve relevant job postings based on a search query.
-
-    Args:
-        query (str): Job-related search query.
-        top_k (int): Number of results to return.
-        retrieve_k (int): Number of candidates to retrieve before ranking.
-
-    Returns:
-        list: Ranked job results.
     """
 
-    #Conenct to vector db
-    vector_db_conn = get_vector_store(collection_name="indonesianjobs_collection")
+    # =====================================================
+    # 🔥 Ambil top_k dari runtime config (kalau ada)
+    # =====================================================
+    if config and "configurable" in config:
+        runtime_top_k = config["configurable"].get("top_k")
+        if runtime_top_k:
+            top_k = runtime_top_k
+
+    # Connect to vector db
+    vector_db_conn = get_vector_store(
+        collection_name="indonesianjobs_collection"
+    )
     
-    # Step 1: Retrieve full docs
+    # Step 1: Retrieve candidates (lebih besar untuk rerank)
     docs = vector_db_conn.similarity_search(query, k=retrieve_k)
 
     # Step 2: Extract page_content for reranking
     contents = [doc.page_content for doc in docs]
 
-    # Step 3 : Rerank
-    reranked = mxbai.rerank(model = reranker,
-                            query = query,
-                            input = contents,
-                            top_k = top_k,
-                            return_input=True)
+    # Step 3: Rerank pakai top_k final
+    reranked = mxbai.rerank(
+        model=reranker,
+        query=query,
+        input=contents,
+        top_k=top_k,
+        return_input=True
+    )
     
-    # Step 4 : Map rerank indices back to docs
+    # Step 4: Map rerank indices back to docs
     results = []
     for item in reranked.data:
         doc = docs[item.index]
@@ -51,17 +59,24 @@ def search_jobs(query: str, top_k: int = 5, retrieve_k: int = 20) -> list:
             "salary": doc.metadata.get("salary"),
             "job_description": doc.page_content
         })
+
     return results
 
+
+# =========================================================
+# 🗄️ READ-ONLY SQL TOOL
+# =========================================================
+# This tool is used by the SQL Agent to:
+# - Execute safe SELECT queries
+# - Enforce salary calculation rules
+# - Prevent destructive SQL operations
+# - Guard against misuse of TEXT salary column
+# =========================================================
 
 #Tools For Text To Sql Agent
 db = SQLDatabase.from_uri("sqlite:///db/jobs.db?mode=ro",
                           engine_args={"connect_args": {"uri": True}}
                           )
-
-# toolkit = SQLDatabaseToolkit(db=db, llm=model)
-
-# tools = toolkit.get_tools()
 
 @tool
 def sql_readonly_query(query: str) -> str:
@@ -87,6 +102,16 @@ def sql_readonly_query(query: str) -> str:
     - `salary_min` and `salary_max` are stored as TEXT.
     - Always CAST them to INTEGER before aggregation.
     - Never use `salary` in WHERE, ORDER BY, or aggregation.
+    - Never use the salary column.
+    - Use salary_min and salary_max only.
+    - Always CAST salary_min and salary_max to REAL.
+    - Always filter:
+    salary_min IS NOT NULL
+    AND salary_max IS NOT NULL
+    AND salary_min != ''
+    AND salary_max != ''
+    AND CAST(salary_min AS INTEGER) > 0
+    AND CAST(salary_max AS INTEGER) > 0
 
     QUERY RULES:
     - ONLY SELECT statements are allowed.
@@ -96,44 +121,92 @@ def sql_readonly_query(query: str) -> str:
     Input:
     - query: A valid SQL SELECT statement using salary_min / salary_max
     """
+
+    # -----------------------------------------------------
+    # 🚫 Block destructive SQL commands
+    # -----------------------------------------------------
     forbidden = ["insert", "update", "delete", "drop", "alter", "truncate"]
     if any(word in query.lower() for word in forbidden):
         return "ERROR: This tool only supports SELECT queries."
 
+    # -----------------------------------------------------
+    # 🛡 Prevent misuse of raw salary TEXT column
+    # -----------------------------------------------------
+    # Ensures salary calculations use salary_min / salary_max only
     if "salary" in query.lower() and not any(
         x in query.lower() for x in ["salary_min", "salary_max"]
     ):
         return "ERROR: Use salary_min and salary_max for salary calculations."
 
+    # -----------------------------------------------------
+    # 📝 Debug log (helps during development & monitoring)
+    # -----------------------------------------------------
+    print("Generated SQL:", query)
+
+    # -----------------------------------------------------
+    # ▶ Execute validated query (read-only)
+    # -----------------------------------------------------
     return db.run(query)
 
 
-# #tools for cv match
+# =========================================================
+# 📄 CV-BASED JOB SEARCH TOOL
+# =========================================================
+# This tool is used to generate job recommendations
+# based on the semantic content of a user's CV.
+#
+# Flow:
+# 1️⃣ Parse CV using LLM
+# 2️⃣ Convert structured CV into semantic query
+# 3️⃣ Perform vector similarity search
+# 4️⃣ Return ranked job results with similarity score
+# =========================================================
+
 @tool
-def cv_search_jobs(query_text:str, upload_cv:str, k: int) -> list:
-  """
-  Docstring for cv_search_jobs
-  
-  :param query_text: Description
-  :type query_text: str
-  :param k: Description
-  :type k: int
-  :return: Description
-  :rtype: list
-  """
-  cv_text = extract_text_from_pdf(file_path=upload_cv)
-  parsing_cv = parse_cv_with_llm(cv_text=cv_text)
-  query_text = build_cv_query(structured_cv=parsing_cv)
+def cv_search_jobs(cv_text: str, k: int = 5) -> list:
+    """
+    Search job recommendations based on CV text.
+    """
 
+    # -----------------------------------------------------
+    # 1️⃣ Parse CV into structured JSON format
+    # -----------------------------------------------------
+    structured_cv = parse_cv_with_llm(cv_text)
 
-  vectorstore = get_vector_store("indonesianjobs_collection")
+    # -----------------------------------------------------
+    # 2️⃣ Build semantic query from structured CV
+    # -----------------------------------------------------
+    query_text = build_cv_query(structured_cv)
 
-  results = vectorstore.similarity_search_with_score(
+    # -----------------------------------------------------
+    # 3️⃣ Connect to vector database (Qdrant)
+    # -----------------------------------------------------
+    vectorstore = get_vector_store("indonesianjobs_collection")
+
+    # Perform similarity search with score
+    # k determines number of results returned
+    results = vectorstore.similarity_search_with_score(
         query_text,
-        k=5
+        k=k
     )
 
-  return results
+    # -----------------------------------------------------
+    # 4️⃣ Format output into clean JSON structure
+    # -----------------------------------------------------
+    formatted = []
+    for doc, score in results:
+        formatted.append({
+            "job_title": doc.metadata.get("job_title"),
+            "company_name": doc.metadata.get("company_name"),
+            "location": doc.metadata.get("location"),
+            "work_type": doc.metadata.get("work_type"),
+            "salary": doc.metadata.get("salary"),
+            "match_score": round(float(score), 4),  # similarity score
+            "job_description": doc.page_content
+        })
+
+    # Return structured recommendations
+    return formatted
 
 
 if __name__ == "__main__":

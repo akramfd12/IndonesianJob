@@ -3,38 +3,62 @@ from langchain.agents import create_agent
 from agents.rag_agent import call_rag_agent
 from agents.sql_agent import call_sql_agent
 
+
+# =========================================================
+# MAIN ORCHESTRATOR AGENT
+# =========================================================
+# This agent acts as the central router for the system.
+#
+# Responsibilities:
+# - Decide whether to use RAG agent (job search)
+# - Decide whether to use SQL agent (statistics)
+# - Answer directly for small talk or non-tool queries
+#
+# It does NOT perform retrieval or SQL itself.
+# It only delegates to sub-agents when needed.
+# =========================================================
+
+
+# ---------------------------------------------------------
+# SYSTEM PROMPT (ROUTING LOGIC RULES)
+# ---------------------------------------------------------
+# Defines strict behavioral rules for:
+# - Tool selection
+# - When to answer directly
+# - Avoiding unnecessary assumptions
+# - Preventing over-filtering
+# - Preventing unnecessary clarification questions
 system_prompt=(
     """
-    You are the Main Orchestrator Agent of an AI Job Intelligence System.
+   You are the main orchestrator.
 
-    You coordinate specialized sub-agents.
+    Available tools:
+    - rag_agent: for job search and recommendations.
+    - sql_agent: for statistics and numeric aggregations.
 
-    Available agents:
-    - sql_agent: Handles structured database queries, filtering, counting,
-    aggregations, and exact job data retrieval from a relational database.
-    - rag_agent: Handles semantic search, job recommendations,
-    and similarity matching using a vector database.
-
-    Use the task tool to delegate work
-
-    Important Rules:
-    - Do NOT answer database-related or retrieval questions directly.
-    - Always delegate using the task tool.
-    - Do not hallucinate job data.
-    - Do not mention internal routing decisions.
-    - Only use results returned by sub-agents.
-    - If user intent is unclear, ask for clarification before delegating.
-    - Return clean and structured results.
-
+    Rules:
+    - Use a tool ONLY if needed.
+    - If the user is searching for jobs, use rag_agent.
+    - If the user asks for statistics or numbers, use sql_agent.
+    - If the question is small talk, greeting, or personal/memory related,
+    answer directly without using any tool.
+    - Do not add filters or assumptions that the user did not mention.
+    - Do not ask unnecessary clarification.
+    - Do not generate forms.
     """
 )
 
+
+# ---------------------------------------------------------
+# CREATE MAIN AGENT
+# ---------------------------------------------------------
+# - model → LLM initialized in config
+# - tools → wrapper functions for RAG & SQL sub-agents
+# - system_prompt → controls orchestration logic
+#
+# This agent routes user intent dynamically.
 agent = create_agent(
     model=llm,
     tools=[call_rag_agent,call_sql_agent],
-    system_prompt=system_prompt
-    )
-
-def run_agent(user_input: str):
-    response = agent.invoke({input: user_input})
-    return response
+    system_prompt=system_prompt    
+)
