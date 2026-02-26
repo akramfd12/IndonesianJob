@@ -9,10 +9,14 @@ langchain-qdrant
 langchain-openai
 langgraph
 
-sentence-transformers
-
 qdrant-client
 sqlite-utils
 
 streamlit
 requests
+
+mixedbread
+sqlalchemy
+
+pypdf
+python-multipart

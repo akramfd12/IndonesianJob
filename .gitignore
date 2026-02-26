@@ -1,1 +1,8 @@
 .venv
+*.env
+
+*test*
+*.pdf
+
+__pycache__/
+jobs1.db
