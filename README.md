@@ -310,18 +310,6 @@ Or use the interactive docs at `http://localhost:8080/docs`.
 - **Load balancing** with multiple instances recommended for production
 - **Async database calls** can be optimized in `services/`
 
-## Production Checklist
-
-- [ ] Use production-grade LLM (gpt-4-turbo or similar)
-- [ ] Set up Qdrant cluster or managed service
-- [ ] Enable authentication (API key, OAuth)
-- [ ] Configure logging & monitoring (Sentry, DataDog)
-- [ ] Add rate limiting
-- [ ] Use environment-specific configs
-- [ ] Set `debug=False` in FastAPI
-- [ ] Run tests before deployment
-- [ ] Document custom tools & queries
-
 ## Resources
 
 - [LangChain Docs](https://python.langchain.com/)
