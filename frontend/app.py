@@ -1,118 +1,13 @@
-# import streamlit as st
-# import requests
-# import uuid
-
-# st.set_page_config(page_title="Job AI Assistant", page_icon="🤖")
-
-# API_CHAT = "http://localhost:8000/chat"
-# API_RESET = "http://localhost:8000/reset"
-
-# st.title("🤖 Job Intelligence Assistant")
-
-# # =========================
-# # 🎛 Result Settings
-# # =========================
-# top_k = st.slider(
-#     "Jumlah lowongan ditampilkan",
-#     min_value=1,
-#     max_value=20,
-#     value=5
-# )
-
-# # =========================
-# # 1️⃣ Generate user_id per session
-# # =========================
-# if "user_id" not in st.session_state:
-#     st.session_state.user_id = str(uuid.uuid4())
-
-# # =========================
-# # 2️⃣ Reset Button
-# # =========================
-# col1, col2 = st.columns([6, 1])
-
-# with col2:
-#     if st.button("Reset"):
-#         requests.post(
-#             API_RESET,
-#             params={"user_id": st.session_state.user_id}
-#         )
-#         st.session_state.messages = []
-#         st.rerun()
-
-# # =========================
-# # 3️⃣ Chat history
-# # =========================
-# if "messages" not in st.session_state:
-#     st.session_state.messages = []
-
-# for msg in st.session_state.messages:
-#     with st.chat_message(msg["role"]):
-#         st.markdown(msg["content"])
-
-# # =========================
-# # 4️⃣ User input
-# # =========================
-# if prompt := st.chat_input("Tanya soal lowongan kerja..."):
-
-#     # Simpan user message
-#     st.session_state.messages.append({
-#         "role": "user",
-#         "content": prompt
-#     })
-
-#     with st.chat_message("user"):
-#         st.markdown(prompt)
-
-#     # =========================
-#     # 5️⃣ Call backend
-#     # =========================
-#     with st.chat_message("assistant"):
-#         with st.spinner("Thinking..."):
-
-#             response = requests.post(
-#                 API_CHAT,
-#                 json={
-#                     "user_id": st.session_state.user_id,
-#                     "user_input": prompt,
-#                     "top_k": top_k   # 🔥 kirim ke backend
-#                 }
-#             )
-
-#             data = response.json()
-
-#             answer = data.get("answer", "Terjadi kesalahan.")
-#             token_usage = data.get("token_usage", {})
-#             tool_calls = data.get("tool_calls", [])
-
-#             st.markdown(answer)
-
-#             # 🔹 Tampilkan token kecil di bawah jawaban
-#             if token_usage:
-#                 st.caption(
-#                     f"🪙 Tokens: {token_usage.get('total_tokens', 0)}"
-#                 )
-
-#             # 🔹 Optional: tampilkan tool yang dipakai
-#             if tool_calls:
-#                 with st.expander("🛠 Tool Used"):
-#                     st.json(tool_calls)
-
-#     # Simpan jawaban AI
-#     st.session_state.messages.append({
-#         "role": "assistant",
-#         "content": answer
-#     })
-
-
 import streamlit as st
 import requests
 import uuid
+from config import API_CHAT, API_RESET, API_UPLOAD
 
 st.set_page_config(page_title="Job AI Assistant", page_icon="🤖")
 
-API_CHAT = "http://localhost:8000/chat"
-API_RESET = "http://localhost:8000/reset"
-API_UPLOAD = "http://localhost:8000/upload-cv"
+API_CHAT = API_CHAT
+API_RESET = API_RESET
+API_UPLOAD = API_UPLOAD
 
 st.title("🤖 Job Intelligence Assistant")
 
