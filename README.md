@@ -317,28 +317,6 @@ Or use the interactive docs at `http://localhost:8080/docs`.
 - [FastAPI Tutorial](https://fastapi.tiangolo.com/)
 - [OpenAI API Reference](https://platform.openai.com/docs/)
 
-## Roadmap
-
-### Phase 1 (MVP) ✅
-- [x] Basic RAG search
-- [x] LLM agent orchestration
-- [x] FastAPI endpoints
-- [x] Qdrant integration
-
-### Phase 2 (Planned)
-- [ ] User authentication & API keys
-- [ ] Chat history persistence
-- [ ] Redis caching for embeddings
-- [ ] Unit & integration tests
-- [ ] Docker & docker-compose
-
-### Phase 3 (Future)
-- [ ] Multi-language support (English, Chinese, etc.)
-- [ ] Advanced filtering (skills, benefits, work arrangement)
-- [ ] Job recommendation algorithm
-- [ ] Admin dashboard
-- [ ] Analytics & reporting
-
 ## License
 
 MIT License — see [LICENSE](LICENSE) file.
